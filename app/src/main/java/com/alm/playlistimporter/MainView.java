@@ -14,5 +14,5 @@ public interface MainView {
 
     void showMessage(String text);
 
-    void appendList(String item);
+    void appendList(Track item);
 }

@@ -1,27 +1,17 @@
 package com.alm.playlistimporter;
 
 import android.content.ContentResolver;
-import android.content.ContentUris;
-import android.content.ContentValues;
 import android.database.Cursor;
 import android.net.Uri;
 import android.provider.MediaStore;
 import android.support.annotation.NonNull;
-import android.text.TextUtils;
 import android.util.Log;
-
-import org.xmlpull.v1.XmlPullParser;
-import org.xmlpull.v1.XmlPullParserException;
-import org.xmlpull.v1.XmlPullParserFactory;
 
 import java.io.BufferedReader;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
-import java.text.DateFormat;
-import java.util.ArrayList;
-import java.util.Date;
 
 import rx.Observable;
 import rx.Subscriber;
@@ -30,7 +20,7 @@ import rx.Subscriber;
  * Created by A. Labay on 15/01/16.
  * As part of the project Playlist Importer.
  */
-public class PlaylistReader implements Observable.OnSubscribe<String> {
+public class PlaylistReader implements Observable.OnSubscribe<Track> {
 
     public static final String TAG = PlaylistReader.class.getSimpleName();
 
@@ -56,7 +46,7 @@ public class PlaylistReader implements Observable.OnSubscribe<String> {
         }
     }
 
-    public static Observable<String> execute(ContentResolver cr, @NonNull Uri file) {
+    public static Observable<Track> execute(ContentResolver cr, @NonNull Uri file) {
         return Observable.create(new PlaylistReader(cr, file));
     }
 
@@ -72,7 +62,7 @@ public class PlaylistReader implements Observable.OnSubscribe<String> {
 
     private PlaylistParser getParser() {
         if (mType == TYPE_ITUNES) {
-            return new XMLPlaylistParser(mIdRetriever);
+            return null; //new XMLPlaylistParser(mIdRetriever);
         } else if (mType == TYPE_M3U) {
             return new M3UPlaylistParser(mIdRetriever);
         }
@@ -81,43 +71,71 @@ public class PlaylistReader implements Observable.OnSubscribe<String> {
     }
 
     private final IdRetriever mIdRetriever = new IdRetriever() {
+        String[] PROJECTION = new String[] {
+                MediaStore.Audio.Media._ID,
+                MediaStore.Audio.Media.TITLE,
+                MediaStore.Audio.Media.ARTIST,
+                MediaStore.Audio.Media.DATA};
+
         @Override
-        public long getMediaId(String title_key, String artist_key) {
+        public Track getMediaId(String title_key, String artist_key, String uri) {
+            Track track = try_uri(uri);
+            if (track != null)
+                return track;
+
+            return try_title(title_key, artist_key);
+        }
+
+        private Track try_uri(String uri) {
             Cursor c = mResolver.query(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
-                    new String[]{MediaStore.Audio.Media._ID, MediaStore.Audio.Media.ARTIST},
-                    MediaStore.Audio.Media.TITLE + " = ?",
-                    new String[]{title_key},
+                    PROJECTION,
+                    MediaStore.Audio.Media.DATA + " LIKE ",
+                    new String[]{"%" + Uri.parse(uri).getLastPathSegment()},
                     null);
 
             if (c == null)
-                return -1;
+                return null;
 
             if (!c.moveToFirst()) {
                 c.close();
-                return -1;
+                return null;
             }
 
             if (c.getCount() == 1) {
-                long id = c.getLong(0);
+                Track t = new Track(c.getInt(0), c.getString(1), c.getString(2), c.getString(3), true);
                 c.close();
-                return id;
+                return t;
+            }
+            return null;
+        }
+
+        private Track try_title(String title, String artist) {
+            Cursor c = mResolver.query(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
+                    PROJECTION,
+                    MediaStore.Audio.Media.TITLE_KEY + " =? AND " + MediaStore.Audio.Media.ARTIST_KEY + "=?",
+                    new String[]{MediaStore.Audio.keyFor(title), MediaStore.Audio.keyFor(artist)},
+                    null);
+
+            if (c == null)
+                return null;
+
+            if (!c.moveToFirst()) {
+                c.close();
+                return null;
             }
 
-            long id;
-            do {
-                id = c.getLong(0);
-                String artist = c.getString(1);
-                if (artist_key.equalsIgnoreCase(artist))
-                    break;
-                else id = -1;
-            } while (c.moveToNext());
-            c.close();
-            return id;
+            if (c.getCount() == 1) {
+                Track t = new Track(c.getInt(0), c.getString(1), c.getString(2), c.getString(3), true);
+                c.close();
+                return t;
+            }
+
+            return null;
         }
     };
 
     @Override
-    public void call(Subscriber<? super String> subscriber) {
+    public void call(Subscriber<? super Track> subscriber) {
         Log.i(TAG, "Started reader");
         PlaylistParser parser = getParser();
 
@@ -142,37 +160,26 @@ public class PlaylistReader implements Observable.OnSubscribe<String> {
             return;
         }
 
-        long pId = getPlaylistId(getDefaultName(parser.getName()));
-
-        if (pId == -1) {
-            subscriber.onError(new UnsupportedOperationException("Cannot create the playlist"));
-            Log.e(TAG, "Cannot create playlist");
-            return;
-        }
-
-        Log.i(TAG, String.format("Playlist created (%s)", Long.toString(pId)));
-
-        subscriber.onNext(String.format("#P#%d", pId));
-
         Log.i(TAG, "Start parsing...");
-        ArrayList<Long> media_ids = parser.parse(stream, subscriber);
-        Log.i(TAG, String.format("End parsing (%d)", media_ids.size()));
+        try {
+            parser.parse(stream, subscriber);
+        } catch (IOException e) {
+            Log.i(TAG, "Error parsing", e);
+            subscriber.onError(e);
+        }
+        Log.i(TAG, "End parsing");
 
-        ContentValues[] values = getContentValues(pId, media_ids);
-        if (values == null || values.length == 0) {
-            subscriber.onError(new UnsupportedOperationException("No audio found in this device from the playlist"));
-            return;
+
+        try {
+            stream.close();
+        } catch (IOException e) {
+            e.printStackTrace();
         }
 
-        mResolver.bulkInsert(
-                MediaStore.Audio.Playlists.Members.getContentUri("external", pId),
-                values);
-
-        Log.i(TAG, "Finish reader");
         subscriber.onCompleted();
     }
 
-    private String getDefaultName(String string) {
+    /*private String getDefaultName(String string) {
         if (string != null) {
             string = string.trim();
             if (!TextUtils.isEmpty(string))
@@ -221,23 +228,28 @@ public class PlaylistReader implements Observable.OnSubscribe<String> {
         return -1;
     }
 
-    private ContentValues[] getContentValues(long pId, ArrayList<Long> ids) {
+    private ContentValues[] getContentValues(long pId, ArrayList<Track> ids) {
         if (ids.isEmpty())
             return null;
 
         ContentValues[] values = new ContentValues[ids.size()];
+        int excluded = 0;
         for (int i = 0; i < ids.size(); i++) {
+            if (ids.get(i).id == 1) {
+                ++excluded;
+                continue;
+            }
             ContentValues v = new ContentValues(3);
             v.put(MediaStore.Audio.Playlists.Members.PLAYLIST_ID, pId);
-            v.put(MediaStore.Audio.Playlists.Members.AUDIO_ID, ids.get(i));
+            v.put(MediaStore.Audio.Playlists.Members.AUDIO_ID, ids.get(i).id);
             v.put(MediaStore.Audio.Playlists.Members.PLAY_ORDER, i);
-            values[i] = v;
+            values[i-excluded] = v;
         }
 
-        return values;
-    }
+        return Arrays.copyOf(values, ids.size()-excluded);
+    }*/
 
-    private static class XMLPlaylistParser extends PlaylistParser {
+    /*private static class XMLPlaylistParser extends PlaylistParser {
 
         public XMLPlaylistParser(IdRetriever idRetriever) {
             super(idRetriever);
@@ -251,7 +263,7 @@ public class PlaylistReader implements Observable.OnSubscribe<String> {
         }
 
         @Override
-        public ArrayList<Long> parse(@NonNull InputStream file, Subscriber<? super String> subscriber) {
+        public ArrayList<Track> parse(@NonNull InputStream file, Subscriber<? super Track> subscriber) {
             ArrayList<Long> strings = new ArrayList<>();
             try {
                 XmlPullParserFactory factory = XmlPullParserFactory.newInstance();
@@ -279,7 +291,7 @@ public class PlaylistReader implements Observable.OnSubscribe<String> {
                             if (keys != null) {
                                 long id = mIdRetriever.getMediaId(keys[0], keys[1]);
                                 if (id == -1) {
-                                    subscriber.onNext(keys[1] + " - " + keys[0]);
+                                    subscriber.onNext(new Track(-1, keys[0], keys[1], uri, false));
                                 } else {
                                     strings.add(id);
                                 }
@@ -361,7 +373,7 @@ public class PlaylistReader implements Observable.OnSubscribe<String> {
                     }
             }
         }
-    }
+    }*/
 
     private static class M3UPlaylistParser extends PlaylistParser {
 
@@ -378,39 +390,38 @@ public class PlaylistReader implements Observable.OnSubscribe<String> {
         }
 
         @Override
-        public ArrayList<Long> parse(@NonNull InputStream file, Subscriber<? super String> subscriber) {
-            ArrayList<Long> strings = new ArrayList<>();
+        public void parse(@NonNull InputStream file, Subscriber<? super Track> subscriber) throws IOException {
+            BufferedReader br = new BufferedReader(new InputStreamReader(file));
+            String line;
+            while ((line = br.readLine()) != null) {
+                if (line.startsWith("#EXTM3U"))
+                    continue; // starting the file
 
-            try {
-                BufferedReader br = new BufferedReader(new InputStreamReader(file));
-                String line;
-                while ((line = br.readLine()) != null) {
-                    if (line.startsWith("#EXTM3U"))
-                        continue; // starting the file
+                if (!line.startsWith("#EXTINF"))
+                    continue;
 
-                    if (line.startsWith("#EXTINF")) {
-                        try {
-                            String title_artist = line.substring(line.indexOf(",") + 1, line.length());
-                            String[] keys = getTrackKey(title_artist);
-                            long id = mIdRetriever.getMediaId(keys[0], keys[1]);
-                            if (id == -1) {
-                                subscriber.onNext(keys[1] + " - " + keys[0]);
-                            } else {
-                                strings.add(id);
-                            }
-                        } catch (Exception ignored) {
-                            // something failed in this item so skip it but continue parsing the playlist
-                        }
+                try {
+                    String title_artist = line.substring(line.indexOf(",") + 1, line.length());
+                    String[] keys = getTrackKey(title_artist);
+                    String uri = br.readLine();
+
+                    Track track = mIdRetriever.getMediaId(keys[0], keys[1], uri);
+                    if (track == null) {
+                        track = new Track(-1, keys[0], keys[1], uri, false);
                     }
+                    subscriber.onNext(track);
+                } catch (Exception ignored) {
+                    // something failed in this item so skip it but continue parsing the playlist
                 }
-            } catch (IOException e) {
-                e.printStackTrace();
             }
-
-            return strings;
         }
 
         private String[] getTrackKey(String line) {
+            /*
+                Rewrite!!!!
+                Choose first index of '-' no matter how many of them
+                if this fails @IdRetriever will try uri.
+             */
             line = line.trim();
             int counter = 0;
             for (int i = 0; i < line.length(); i++) {
@@ -454,10 +465,8 @@ public class PlaylistReader implements Observable.OnSubscribe<String> {
         /**
          * Parses the playlist
          * @param file the playlist
-         * @return an array containing the "TITLE_KEY, ARTIST_KEY"
-         *          in the playlist.
          */
-        public abstract ArrayList<Long> parse(@NonNull InputStream file, Subscriber<? super String> subscriber);
+        public abstract void parse(@NonNull InputStream file, Subscriber<? super Track> subscriber) throws IOException;
 
 
         /**
@@ -470,7 +479,7 @@ public class PlaylistReader implements Observable.OnSubscribe<String> {
 
     private interface IdRetriever {
 
-        long getMediaId(String title_key, String artist_key);
+        Track getMediaId(String title_key, String artist_key, String uri);
 
     }
 }

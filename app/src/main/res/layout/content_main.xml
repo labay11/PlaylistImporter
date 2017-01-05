@@ -10,26 +10,17 @@
     tools:context="com.alm.playlistimporter.MainActivity"
     tools:showIn="@layout/activity_main">
 
-    <LinearLayout
+    <TextView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="vertical"
+        android:id="@+id/tv_info"
         android:paddingLeft="16dp"
         android:paddingStart="16dp"
         android:paddingRight="16dp"
-        android:paddingEnd="16dp">
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:id="@+id/tv_info"/>
+        android:paddingEnd="16dp"/>
 
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="Not inserted items:"/>
-    </LinearLayout>
-
-    <ListView android:layout_width="match_parent"
+    <android.support.v7.widget.RecyclerView
+        android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:id="@+id/list"/>
 

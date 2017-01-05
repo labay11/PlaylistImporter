@@ -12,20 +12,17 @@ import android.support.v4.app.LoaderManager;
 import android.support.v4.content.Loader;
 import android.support.v7.app.AlertDialog;
 import android.support.v7.app.AppCompatActivity;
+import android.support.v7.widget.LinearLayoutManager;
+import android.support.v7.widget.RecyclerView;
 import android.text.Editable;
 import android.text.TextWatcher;
-import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.AdapterView;
-import android.widget.BaseAdapter;
 import android.widget.EditText;
-import android.widget.ListView;
 import android.widget.TextView;
 import android.widget.Toast;
 
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.List;
 
 /**
@@ -33,7 +30,7 @@ import java.util.List;
  * As part of the project Playlist Importer.
  */
 public class SongFinderActivity extends AppCompatActivity
-        implements LoaderManager.LoaderCallbacks<List<SongFinderActivity.Song>> {
+        implements LoaderManager.LoaderCallbacks<List<Track>> {
 
     public static final String EXTRA_PLAYLIST_ID = "extra_playlist_id";
     public static final String EXTRA_SONG = "extra_song_key";
@@ -57,20 +54,21 @@ public class SongFinderActivity extends AppCompatActivity
         }
 
         TextView mTextView = (TextView) findViewById(R.id.text);
-        ListView mListView = (ListView) findViewById(R.id.list);
+        RecyclerView mListView = (RecyclerView) findViewById(R.id.list);
         EditText mEditText = (EditText) findViewById(R.id.edit_text);
 
-        mAdapter = new SongAdapter(this);
+        mAdapter = new SongAdapter(this, new BaseAdapter.OnItemClickListener<Track>() {
+            @Override
+            public void onItemClick(View itemView, int pos, Track item) {
+                confirmAddToPlaylist(item);
+
+            }
+        });
+        mListView.setLayoutManager(new LinearLayoutManager(this));
+        mListView.setHasFixedSize(true);
         mListView.setAdapter(mAdapter);
 
         mTextView.setText(mSongText);
-
-        mListView.setOnItemClickListener(new AdapterView.OnItemClickListener() {
-            @Override
-            public void onItemClick(AdapterView<?> adapterView, View view, int i, long l) {
-                confirmAddToPlaylist(mAdapter.getItem(i));
-            }
-        });
 
         mEditText.addTextChangedListener(new TextWatcher() {
             @Override
@@ -96,29 +94,22 @@ public class SongFinderActivity extends AppCompatActivity
         getSupportLoaderManager().initLoader(0, bundle, this);
     }
 
-    private void confirmAddToPlaylist(final Song song) {
+    private void confirmAddToPlaylist(final Track song) {
         new AlertDialog.Builder(this)
-                .setMessage(String.format("Do you want to add %s to the playlist instead of %s", song.mTitle, mSongText))
+                .setMessage(String.format("Do you want to add %s to the playlist instead of %s", song.title, mSongText))
                 .setPositiveButton(android.R.string.ok, new DialogInterface.OnClickListener() {
                     @Override
                     public void onClick(DialogInterface dialogInterface, int i) {
-                        addToPlaylist(song.mId);
+                        addToPlaylist(song.id);
                     }
                 }).setNegativeButton(android.R.string.cancel, null)
                 .show();
     }
 
     private void addToPlaylist(long songId) {
-        Cursor cursor = getContentResolver().query(MediaStore.Audio.Playlists.Members.getContentUri("external", mPlaylistId),
-                null, null, null, null);
-
-        int count = cursor.getCount();
-        cursor.close();
-
         ContentValues values = new ContentValues();
         values.put(MediaStore.Audio.Playlists.Members.AUDIO_ID, songId);
         values.put(MediaStore.Audio.Playlists.Members.PLAYLIST_ID, mPlaylistId);
-        values.put(MediaStore.Audio.Playlists.Members.PLAY_ORDER, count);
 
         Uri uri = getContentResolver()
                 .insert(MediaStore.Audio.Playlists.Members.getContentUri("external", mPlaylistId),
@@ -139,100 +130,56 @@ public class SongFinderActivity extends AppCompatActivity
     }
 
     @Override
-    public Loader<List<Song>> onCreateLoader(int id, Bundle args) {
+    public Loader<List<Track>> onCreateLoader(int id, Bundle args) {
         return new SearchLoader(this, args.getString("query"));
     }
 
     @Override
-    public void onLoadFinished(Loader<List<Song>> loader, List<Song> data) {
-        mAdapter.setItems(data);
+    public void onLoadFinished(Loader<List<Track>> loader, List<Track> data) {
+        mAdapter.set(data);
     }
 
     @Override
-    public void onLoaderReset(Loader<List<Song>> loader) {
+    public void onLoaderReset(Loader<List<Track>> loader) {
     }
 
-    private static class SongAdapter extends BaseAdapter {
+    private static class SongAdapter extends BaseAdapter<Track, TrackHolder> {
 
-        private LayoutInflater mInflater;
-
-        private final List<Song> mItems = new ArrayList<>();
-
-        public SongAdapter(Context context) {
-            this.mInflater = LayoutInflater.from(context);
+        public SongAdapter(Context context, OnItemClickListener<Track> itemClickListener) {
+            super(context, itemClickListener);
         }
 
         @Override
-        public int getCount() {
-            return mItems.size();
-        }
-
-        @Override
-        public Song getItem(int i) {
-            return mItems.get(i);
-        }
-
-        @Override
-        public long getItemId(int i) {
-            return i;
-        }
-
-        @Override
-        public View getView(int i, View contentView, ViewGroup viewGroup) {
-            SongHolder holder;
-            if (contentView == null) {
-                contentView = mInflater.inflate(R.layout.list_item_song, viewGroup, false);
-                holder = new SongHolder(contentView);
-                contentView.setTag(holder);
-            } else {
-                holder = (SongHolder) contentView.getTag();
-            }
-
-            holder.bind(getItem(i));
-
-            return contentView;
-        }
-
-        public void setItems(Collection<Song> mList) {
-            mItems.clear();
-            if (mList != null) {
-                mItems.addAll(mList);
-            }
-
-            notifyDataSetChanged();
+        public TrackHolder onCreateViewHolder(ViewGroup parent, int viewType) {
+            return new TrackHolder(mInflater.inflate(R.layout.list_item_song, parent, false));
         }
     }
 
-    private static class SongHolder {
+    private static class TrackHolder extends BaseAdapter.BaseHolder<Track> {
 
         public TextView mTitleView, mArtistView;
 
-        public SongHolder(View content) {
-            mTitleView = (TextView) content.findViewById(R.id.text1);
-            mArtistView = (TextView) content.findViewById(R.id.text2);
+        public TrackHolder(View itemView) {
+            super(itemView);
+            mTitleView = (TextView) itemView.findViewById(R.id.text1);
+            mArtistView = (TextView) itemView.findViewById(R.id.text2);
         }
 
-        public void bind(Song s) {
-            mTitleView.setText(s.mTitle);
-            mArtistView.setText(s.mArtist);
-        }
-    }
+        @Override
+        public void bind(final Track item, final BaseAdapter.OnItemClickListener<Track> itemClickListener) {
+            mTitleView.setText(item.title);
+            mArtistView.setText(item.artist);
 
-    public static class Song {
-
-        public final String mTitle;
-        public final String mArtist;
-
-        public final long mId;
-
-        public Song(long id, String title, String artist) {
-            this.mId = id;
-            this.mTitle = title;
-            this.mArtist = artist;
+            itemView.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View view) {
+                    itemClickListener.onItemClick(itemView, getAdapterPosition(), item);
+                }
+            });
         }
     }
 
-    public static class SearchLoader extends AsyncLoader<List<Song>> {
+    public static class SearchLoader extends AsyncLoader<List<Track>> {
 
         public static final String[] PROJECTION = new String[] {
                 MediaStore.Audio.Media._ID,
@@ -248,7 +195,7 @@ public class SongFinderActivity extends AppCompatActivity
         }
 
         @Override
-        public List<Song> loadInBackground() {
+        public List<Track> loadInBackground() {
             Cursor cursor = getContext()
                     .getContentResolver()
                     .query(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
@@ -265,10 +212,10 @@ public class SongFinderActivity extends AppCompatActivity
                 return null;
             }
 
-            List<Song> songs = new ArrayList<>(cursor.getCount());
+            List<Track> songs = new ArrayList<>(cursor.getCount());
 
             do {
-                songs.add(new Song(cursor.getInt(0), cursor.getString(1), cursor.getString(2)));
+                songs.add(new Track(cursor.getInt(0), cursor.getString(1), cursor.getString(2)));
             } while (cursor.moveToNext());
 
             cursor.close();

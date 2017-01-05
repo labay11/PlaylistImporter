@@ -3,15 +3,17 @@ package com.alm.playlistimporter;
 import android.content.Context;
 import android.content.Intent;
 import android.graphics.Color;
+import android.os.Build;
 import android.os.Bundle;
+import android.support.annotation.NonNull;
 import android.support.design.widget.FloatingActionButton;
 import android.support.design.widget.Snackbar;
 import android.support.v7.app.AppCompatActivity;
+import android.support.v7.widget.LinearLayoutManager;
+import android.support.v7.widget.RecyclerView;
 import android.support.v7.widget.Toolbar;
 import android.view.View;
-import android.widget.AdapterView;
-import android.widget.ArrayAdapter;
-import android.widget.ListView;
+import android.view.ViewGroup;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -20,10 +22,8 @@ public class MainActivity extends AppCompatActivity implements MainView {
     public static final int FILE_SELECT_CODE = 1;
 
     private TextView mInfo;
-    private ArrayAdapter<String> mAdapter;
+    private TrackAdapter mAdapter;
     private MainPresenterImpl mPresenter;
-
-    private long mPlaylistID = -1;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -49,10 +49,11 @@ public class MainActivity extends AppCompatActivity implements MainView {
 
         mInfo = (TextView) findViewById(R.id.tv_info);
 
-        ListView lv = (ListView) findViewById(R.id.list);
-        mAdapter = new ArrayAdapter<>(this, android.R.layout.simple_list_item_1);
+        RecyclerView lv = (RecyclerView) findViewById(R.id.list);
+        mAdapter = new TrackAdapter(this, mOnItemClickListener);
+        lv.setLayoutManager(new LinearLayoutManager(this));
+        lv.setHasFixedSize(true);
         lv.setAdapter(mAdapter);
-        lv.setOnItemClickListener(mOnItemClickListener);
     }
 
     @Override
@@ -73,13 +74,8 @@ public class MainActivity extends AppCompatActivity implements MainView {
     }
 
     @Override
-    public void appendList(String item) {
-        if (item.startsWith("#P#")) {
-            mPlaylistID = Long.parseLong(item.substring(3));
-            return;
-        }
-
-        mAdapter.add(item);
+    public void appendList(Track item) {
+        mAdapter.addTrack(item);
     }
 
     public void clear() {
@@ -123,16 +119,72 @@ public class MainActivity extends AppCompatActivity implements MainView {
         }
     }
 
-    private final AdapterView.OnItemClickListener mOnItemClickListener =
-            new AdapterView.OnItemClickListener() {
+    private final BaseAdapter.OnItemClickListener<Track> mOnItemClickListener =
+            new BaseAdapter.OnItemClickListener<Track>() {
                 @Override
-                public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
-                    String text = ((TextView) view).getText().toString();
-
+                public void onItemClick(View itemView, int pos, Track item) {
                     Intent intent = new Intent(MainActivity.this, SongFinderActivity.class);
-                    intent.putExtra(SongFinderActivity.EXTRA_SONG, text);
-                    intent.putExtra(SongFinderActivity.EXTRA_PLAYLIST_ID, mPlaylistID);
+                    intent.putExtra(SongFinderActivity.EXTRA_SONG, item.title + " - " + item.artist);
+                    intent.putExtra(SongFinderActivity.EXTRA_PLAYLIST_ID, mPresenter.getPlaylistId());
                     startActivity(intent);
                 }
             };
+
+    private static class TrackAdapter extends BaseAdapter<Track, TrackHolder> {
+
+
+        public TrackAdapter(Context context, OnItemClickListener<Track> itemClickListener) {
+            super(context, itemClickListener);
+        }
+
+        @Override
+        public TrackHolder onCreateViewHolder(ViewGroup parent, int viewType) {
+            return new TrackHolder(mInflater.inflate(R.layout.list_item_song, parent, false));
+        }
+
+        public void addTrack(@NonNull Track track) {
+            if (track.isAdded) {
+                add(track);
+            } else {
+                add(0, track);
+            }
+        }
+    }
+
+    private static class TrackHolder extends BaseAdapter.BaseHolder<Track> {
+
+        private TextView text1, text2;
+        private View backgroud;
+
+        public TrackHolder(View itemView) {
+            super(itemView);
+            text1 = (TextView) itemView.findViewById(R.id.text1);
+            text2 = (TextView) itemView.findViewById(R.id.text2);
+            backgroud = itemView.findViewById(R.id.list_item_container);
+        }
+
+        @Override
+        public void bind(final Track item,
+                         final BaseAdapter.OnItemClickListener<Track> itemClickListener) {
+            text1.setText(item.title);
+            text2.setText(item.artist);
+            if (item.isAdded) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN) {
+                    backgroud.setBackground(null);
+                } else {
+                    //noinspection deprecation
+                    backgroud.setBackgroundDrawable(null);
+                }
+            } else {
+                backgroud.setBackgroundResource(R.color.track_not_added);
+            }
+
+            itemView.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View view) {
+                    itemClickListener.onItemClick(view, getAdapterPosition(), item);
+                }
+            });
+        }
+    }
 }

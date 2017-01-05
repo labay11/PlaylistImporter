@@ -8,7 +8,7 @@ import rx.Subscriber;
  * Created by A. Labay on 25/01/16.
  * As part of the project Playlist Importer.
  */
-public abstract class MainPresenter extends Subscriber<String> {
+public abstract class MainPresenter extends Subscriber<Track> {
 
     protected MainView mView;
 

@@ -2,15 +2,23 @@
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
               android:orientation="vertical"
               android:layout_width="match_parent"
-              android:layout_height="match_parent">
+              android:layout_height="?listPreferredItemHeight"
+              android:id="@+id/list_item_container"
+    android:paddingLeft="8dp"
+    android:paddingStart="8dp"
+    android:paddingEnd="8dp"
+    android:paddingRight="8dp">
 
     <TextView
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
+        android:layout_height="0dp"
+        android:layout_weight="1"
         android:id="@+id/text1"
         android:maxLines="1"
         android:ellipsize="end"
-        android:textAppearance="@style/TextAppearance.AppCompat.SearchResult.Title"/>
+        android:gravity="center_vertical"
+        android:textAppearance="@style/TextAppearance.AppCompat.SearchResult.Title"
+        />
 
     <TextView
         android:layout_width="match_parent"
