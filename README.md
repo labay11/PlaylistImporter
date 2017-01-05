@@ -1,8 +1,8 @@
 # PlaylistImporter
 
-Simple project created to import .m3u playlists, exported from your computer, into your Android devide without needing to change the URIs doing nothing.
+Simple project created to import `.m3u` playlists, exported from your computer, into your Android devide without needing to change the URIs doing nothing.
 
-Choose the .m3u file, wait until the parser finishes and that's all. If some files aren't found they will be marked in red so you can add them manually just by clicking over them and searching for the correct track.
+Choose the `.m3u` file, wait until the parser finishes and that's all. If some files aren't found they will be marked in red so you can add them manually just by clicking over them and searching for the correct track.
 
 # Issues
 
