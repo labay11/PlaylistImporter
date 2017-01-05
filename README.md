@@ -6,7 +6,7 @@ Choose the .m3u file, wait until the parser finishes and that's all. If some fil
 
 # Issues
 
-Infinite + one, I've done this because I needed one day and I decided to share it because I think it can be usefull for other people. Any correction or comment will be very appreciated.
+Infinite + one, I've done this because I needed one day and I decided to share it because I think it can be useful for other people. Any correction or comment will be very appreciated.
 
 # License
 
