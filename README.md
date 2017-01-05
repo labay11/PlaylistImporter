@@ -1,7 +1,11 @@
 # PlaylistImporter
+===================
+
 Imports .m3u playlists.
-============================
+
 # License
+=============
+
 Copyright 2017 xerlay11
 
 Licensed under the Apache License, Version 2.0 (the "License");
