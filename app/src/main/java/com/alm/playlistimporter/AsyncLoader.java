@@ -11,8 +11,6 @@ public abstract class AsyncLoader<D> extends AsyncTaskLoader<D> {
 
     private D mData;
 
-    public static final String CASE_ACCENT_INSENSITIVE = " COLLATE UNICODE";
-
     /**
      * Constructor of <code>WrappedAsyncTaskLoader</code>
      *

@@ -4,6 +4,10 @@ Simple project created to import .m3u playlists, exported from your computer, in
 
 Choose the .m3u file, wait until the parser finishes and that's all. If some files aren't found they will be marked in red so you can add them manually just by clicking over them and searching for the correct track.
 
+# Issues
+
+Infinite + one, I've done this because I needed one day and I decided to share it because I think it can be usefull for other people. Any correction or comment will be very appreciated.
+
 # License
 
 Copyright 2017 xerlay11
